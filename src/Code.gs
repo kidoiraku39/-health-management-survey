@@ -55,12 +55,14 @@ function doPost(e) {
 function formatMultiChoice(selectedIds) {
   if (!selectedIds || !Array.isArray(selectedIds)) return "";
   const optionsMap = {
-    'exp1': '身体の痛み・姿勢',
-    'exp2': '生活習慣・数値改善',
-    'exp3': '食事・栄養',
-    'exp4': '心の健康・ストレス',
-    'exp5': '女性の健康',
-    'none': '希望しない'
+    'exp_body': '身体の痛み・姿勢改善',
+    'exp_lifestyle': '生活習慣病・数値改善',
+    'exp_nutrition': '食事・栄養指導',
+    'exp_mental': '心の健康・ストレスケア',
+    'exp_sleep': '睡眠・休息改善',
+    'exp_women': '女性の健康サポート',
+    'exp_smoking': '禁煙サポート',
+    'exp_none': '希望しない'
   };
   return selectedIds.map(id => optionsMap[id] || id).join(", ");
 }
