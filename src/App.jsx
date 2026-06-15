@@ -203,7 +203,8 @@ function App() {
     try {
       const response = await fetch(GAS_WEB_APP_URL);
       if (!response.ok) throw new Error("データの取得に失敗しました。");
-      const data = await response.json();
+      const text = await response.text();
+      const data = JSON.parse(text);
       setDbData(data);
     } catch (err) {
       console.error(err);

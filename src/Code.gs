@@ -11,7 +11,7 @@ function doGet(e) {
         averageLossPercentage: 0,
         totalAnnualLoss: 0,
         departmentStats: {}
-      })).setMimeType(ContentService.MimeType.JSON);
+      })).setMimeType(ContentService.MimeType.TEXT);
     }
     
     const lastRow = sheet.getLastRow();
@@ -21,7 +21,7 @@ function doGet(e) {
         averageLossPercentage: 0,
         totalAnnualLoss: 0,
         departmentStats: {}
-      })).setMimeType(ContentService.MimeType.JSON);
+      })).setMimeType(ContentService.MimeType.TEXT);
     }
     
     // 全データ取得 (ヘッダーを除く)
@@ -88,11 +88,11 @@ function doGet(e) {
     };
     
     return ContentService.createTextOutput(JSON.stringify(result))
-      .setMimeType(ContentService.MimeType.JSON);
+      .setMimeType(ContentService.MimeType.TEXT);
       
   } catch (error) {
     return ContentService.createTextOutput(JSON.stringify({ error: error.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
+      .setMimeType(ContentService.MimeType.TEXT);
   }
 }
 
