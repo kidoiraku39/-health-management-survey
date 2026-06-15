@@ -168,7 +168,7 @@ const QUESTIONS = [
   }
 ];
 
-const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxQHCZPOYZPHlLPtTd2NfjZpp8_rF9rUwmPw2SJiI-p70_vsc73v3sxQOl6fIRcKVoAmg/exec"; 
+const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyjArFJ9OwG1YMkhb6121oMmgf0FJJ8zqlJ2WbASNIrFmlHdY7k_HDN8urYKjZrhR5Iyw/exec"; 
 
 function App() {
   const [currentIdx, setCurrentIdx] = useState(0);
