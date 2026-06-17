@@ -71,7 +71,7 @@ const QUESTIONS = [
     id: 'q2_sub',
     type: 'multi',
     title: 'カテゴリ2：その他の気になる症状',
-    subtitle: 'Q2-sub. 副症状の特定：主症状以外で、現在仕事や生活に影響している不調があればすべて選択してください。（複数選択可能）',
+    subtitle: 'Q2-sub. 副症状の特定：<strong style="color: #e63946; font-size: 1.1em; text-decoration: underline;">主症状以外</strong>で、現在仕事や生活に影響している不調があれば<strong style="color: #e63946; font-size: 1.1em; text-decoration: underline;">すべて</strong>選択してください。（複数選択可能）',
     options: [
       { id: 'symp_allergy', label: 'アレルギーによる不調（花粉症・鼻炎・結膜炎など）' },
       { id: 'symp_skin', label: '皮膚の病気・かゆみ（湿疹、アトピーなど）' },
