@@ -47,7 +47,7 @@ const QUESTIONS = [
     id: 'q2',
     type: 'choice',
     title: 'カテゴリ2：健康問題の詳細（QQメソッド）',
-    subtitle: 'Q2. 主症状の特定：現在、仕事に一番影響をもたらしている健康問題（主症状）を1つ選択してください。',
+    subtitle: 'Q2. <strong style="color: #e63946; font-size: 1.1em; text-decoration: underline;">主症状</strong>の特定：現在、仕事に一番影響をもたらしている健康問題（主症状）を<strong style="color: #e63946; font-size: 1.1em; text-decoration: underline;">1つだけ</strong>選択してください。',
     options: [
       { id: 'symp_allergy', label: 'アレルギーによる不調（花粉症・鼻炎・結膜炎など）' },
       { id: 'symp_skin', label: '皮膚の病気・かゆみ（湿疹、アトピーなど）' },
@@ -512,7 +512,7 @@ function App() {
         
         <div className="question-header">
           <h2 className="question-title">{currentQuestion.title}</h2>
-          {currentQuestion.subtitle && <p className="question-subtitle">{currentQuestion.subtitle}</p>}
+          {currentQuestion.subtitle && <p className="question-subtitle" dangerouslySetInnerHTML={{ __html: currentQuestion.subtitle }}></p>}
         </div>
 
         {currentQuestion.type === 'info' && (
