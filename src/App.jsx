@@ -175,7 +175,15 @@ function App() {
   const [answers, setAnswers] = useState({});
   const [isCompleted, setIsCompleted] = useState(false);
   const [result, setResult] = useState(null);
-  const [viewMode, setViewMode] = useState('survey'); 
+  const [viewMode, setViewMode] = useState('survey');
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('admin') === 'true') {
+      setIsAdmin(true);
+    }
+  }, []); 
 
   // ダッシュボード用のリアルタイムデータ状態
   const [dbData, setDbData] = useState(null);
@@ -493,7 +501,11 @@ function App() {
             
             <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
               <button className="btn btn-secondary" style={{flex: 1}} onClick={() => { setCurrentIdx(0); setAnswers({}); setIsCompleted(false); }}>最初からやり直す</button>
-              <button className="btn btn-primary" style={{flex: 1}} onClick={() => setViewMode('dashboard')}>ダッシュボード</button>
+              {isAdmin && (
+                <button className="btn btn-primary" style={{flex: 1}} onClick={() => setViewMode('dashboard')}>
+                  ダッシュボード
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -519,6 +531,11 @@ function App() {
           <div className="info-view">
             <div className="description">{currentQuestion.description}</div>
             <button className="btn btn-primary full-width" onClick={handleNext}>{currentQuestion.buttonLabel}</button>
+            {currentQuestion.id === 'intro' && isAdmin && (
+              <button className="btn btn-secondary full-width" style={{ marginTop: '1rem' }} onClick={() => setViewMode('dashboard')}>
+                管理者ダッシュボードを開く
+              </button>
+            )}
           </div>
         )}
 
