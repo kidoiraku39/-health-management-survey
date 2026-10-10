@@ -14,19 +14,23 @@
 const SHEET_RESPONSES = '回答一覧';
 const SHEET_COMPANIES = '企業マスタ';
 const SHEET_DEBUG = 'デバッグ用';
+const COMPANY_HEADERS = ['企業コード', '会社名', '有効(TRUE/FALSE)', '質問セット（空欄=標準）'];
 
 // 集計を表示する最小の回答者数。これ未満のグループは個人が推測されうるため返さない。
 const MIN_GROUP_SIZE = 5;
 
 const RESPONSE_HEADERS = [
   'タイムスタンプ', '従業員ID', '部署', '損失率(%)', 'Q1', 'Q2', 'Q2-sub(副症状)',
-  'Q3', 'Q4', 'Q5', 'Q6', 'Q6-1', 'Q7', 'Q8', '企業コード', '同意バージョン'
+  'Q3', 'Q4', 'Q5', 'Q6', 'Q6-1', 'Q7', 'Q8', '企業コード', '同意バージョン',
+  '質問セット', 'カスタム回答'
 ];
 const COL_DEPT = 2;      // 0始まりの列位置
 const COL_LOSS = 3;
 const COL_COMPANY = 14;
 
-const DEPARTMENTS = ['営業・企画', '開発・技術', '総務・人事・経理', 'その他'];
+// 部署名は、企業ごとの質問セットで変えられる。長さだけ制限して、そのまま集計に使う
+const MAX_DEPARTMENT_CHARS = 30;
+const MAX_CUSTOM_ITEMS = 30;
 
 const SYMPTOM_LABELS = {
   symp_allergy: 'アレルギーによる不調',
@@ -100,7 +104,7 @@ function doPost(e) {
 function handleCompany_(params) {
   const company = findCompany_(params.company);
   if (!company) return { ok: false, error: 'invalid_company' };
-  return { ok: true, name: company.name };
+  return { ok: true, name: company.name, questionSet: company.questionSet };
 }
 
 // ===== action: submit =====
@@ -113,13 +117,14 @@ function handleSubmit_(params) {
   const answers = params.answers && typeof params.answers === 'object' ? params.answers : {};
 
   const q1 = clampInt_(answers.q1, 0, 10, 10);
-  const q3 = clampInt_(answers.q3, 0, 90, 0);
-  const q4 = clampInt_(answers.q4, 1, 10, 10);
-  const q5 = clampInt_(answers.q5, 1, 10, 10);
+  // Q3〜Q5 は、その企業の質問セットにない場合は空欄にする（聞いていないことを回答として書かない）
+  const q3 = optInt_(answers.q3, 0, 90);
+  const q4 = optInt_(answers.q4, 1, 10);
+  const q5 = optInt_(answers.q5, 1, 10);
   // 損失率はクライアント送信値を信用せず、Q1から再計算する
   const lossPercentage = Math.round(((10 - q1) / 10) * 100);
 
-  const department = DEPARTMENTS.indexOf(params.department) !== -1 ? params.department : '未設定';
+  const department = sanitizeCell_(String(params.department || '').trim().slice(0, MAX_DEPARTMENT_CHARS)) || '未設定';
   const employeeId = sanitizeCell_(String(params.employeeId || '匿名希望').trim().slice(0, 50)) || '匿名希望';
 
   const q2Id = answers.q2 && answers.q2.id;
@@ -132,17 +137,19 @@ function handleSubmit_(params) {
     department,
     lossPercentage,
     q1,
-    SYMPTOM_LABELS[q2Id] || 'なし',
+    q2Id ? (SYMPTOM_LABELS[q2Id] || 'なし') : '',
     mapIds_(answers.q2_sub, SYMPTOM_LABELS),
     q3,
     q4,
     q5,
-    ENV_LABELS[q6Id] || 'なし',
+    q6Id ? (ENV_LABELS[q6Id] || 'なし') : '',
     sanitizeCell_(answers.q6_1),
     mapIds_(answers.q7, EXPERT_LABELS),
     sanitizeCell_(answers.q8),
     company.code,
-    sanitizeCell_(String(params.consentVersion || '').slice(0, 30))
+    sanitizeCell_(String(params.consentVersion || '').slice(0, 30)),
+    company.questionSet,
+    formatCustomAnswers_(params.extra)
   ]);
   return { ok: true };
 }
@@ -201,7 +208,7 @@ function buildStats_(rows) {
   // 部署別
   const byDept = {};
   valid.forEach(function (r) {
-    const d = DEPARTMENTS.indexOf(r[COL_DEPT]) !== -1 ? r[COL_DEPT] : 'その他';
+    const d = String(r[COL_DEPT] || '').trim() || '未設定';
     if (!byDept[d]) byDept[d] = { labels: [d], count: 0, sum: 0 };
     byDept[d].count++;
     byDept[d].sum += parseFloat(r[COL_LOSS]);
@@ -280,9 +287,15 @@ function listCompanies_() {
   const sheet = getCompanySheet_();
   const last = sheet.getLastRow();
   if (last <= 1) return [];
-  return sheet.getRange(2, 1, last - 1, 3).getValues()
+  return sheet.getRange(2, 1, last - 1, 4).getValues()
     .map(function (r) {
-      return { code: String(r[0]).trim(), name: String(r[1]).trim(), enabled: r[2] !== false && String(r[2]).toUpperCase() !== 'FALSE' };
+      return {
+        code: String(r[0]).trim(),
+        name: String(r[1]).trim(),
+        enabled: r[2] !== false && String(r[2]).toUpperCase() !== 'FALSE',
+        // 質問セット（コード側 src/questionSets.js のキー）。空欄は標準
+        questionSet: String(r[3] || '').trim().slice(0, 30) || 'standard'
+      };
     })
     .filter(function (c) { return c.code && c.enabled; });
 }
@@ -325,12 +338,31 @@ function getCompanySheet_() {
   let sheet = ss.getSheetByName(SHEET_COMPANIES);
   if (!sheet) {
     sheet = ss.insertSheet(SHEET_COMPANIES);
-    sheet.getRange(1, 1, 1, 3).setValues([['企業コード', '会社名', '有効(TRUE/FALSE)']]).setFontWeight('bold');
+    sheet.getRange(1, 1, 1, 4).setValues([COMPANY_HEADERS]).setFontWeight('bold');
+  } else if (!sheet.getRange(1, 4).getValue()) {
+    // 既存の企業マスタ（3列）にも、質問セット列の見出しを補う
+    sheet.getRange(1, 4).setValue(COMPANY_HEADERS[3]).setFontWeight('bold');
   }
   return sheet;
 }
 
 // ===== 入力の整形・検証 =====
+
+// 数値の質問。回答がない（質問セットにない）ときは空欄にする
+function optInt_(value, min, max) {
+  if (value === undefined || value === null || value === '') return '';
+  return clampInt_(value, min, max, '');
+}
+
+// 追加質問の回答 [{q, a}] を、件数・長さを制限して JSON の文字列にする
+function formatCustomAnswers_(extra) {
+  if (!Array.isArray(extra)) return '';
+  const items = extra.slice(0, MAX_CUSTOM_ITEMS).map(function (e) {
+    return { q: String((e && e.q) || '').slice(0, 100), a: String((e && e.a) || '').slice(0, MAX_TEXT_CHARS) };
+  }).filter(function (e) { return e.q && e.a; });
+  // JSON は [ で始まるため、数式として解釈されない（途中で切ると壊れるので、長さは件数と1件の長さで制限済み）
+  return items.length ? JSON.stringify(items) : '';
+}
 
 function clampInt_(value, min, max, fallback) {
   const n = parseInt(value, 10);
