@@ -20,12 +20,16 @@ export async function gasPost(body) {
 }
 
 // ===== 同意画面の設定 =====
-// 公開前に必ず【要設定】の3項目を実際の内容に書き換えてください。
-// 未設定のままだと、従業員の画面には「準備中」と表示され、回答できません（誤公開の防止）。
+// 運営者情報は環境変数（Vercelの Environment Variables）で設定します。ソースを書き換える必要はありません。
+//   VITE_OPERATOR_NAME      運営者名（例：○○）
+//   VITE_OPERATOR_CONTACT   問い合わせ先（メールアドレスなど）
+//   VITE_OPERATOR_RETENTION 保管期間（例：回答から12か月）
+// 3つとも設定されるまで、従業員の画面には「準備中」と表示され、回答できません（誤公開の防止）。
+// 運営者が異なる事業で使う場合は、事業ごとにVercelのプロジェクトとGASを分けて、それぞれ設定してください。
 export const OPERATOR = {
-  name: '【要設定】運営者名（例：○○事業の名称）',
-  contact: '【要設定】問い合わせ先（メールアドレスなど）',
-  retention: '【要設定】保管期間（例：回答から12か月）',
+  name: import.meta.env.VITE_OPERATOR_NAME || '【要設定】運営者名',
+  contact: import.meta.env.VITE_OPERATOR_CONTACT || '【要設定】問い合わせ先',
+  retention: import.meta.env.VITE_OPERATOR_RETENTION || '【要設定】保管期間',
 };
 
 export const isOperatorConfigured = !Object.values(OPERATOR).some((v) => v.includes('【要設定】'));
