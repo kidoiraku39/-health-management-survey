@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import './App.css';
 import AdminPage from './AdminPage.jsx';
-import { gasPost, OPERATOR, isOperatorConfigured, CONSENT_VERSION, CONSENT_SECTIONS } from './config.js';
+import { gasPost, OPERATOR, isAppConfigured, CONSENT_VERSION, CONSENT_SECTIONS } from './config.js';
 
 // 厚生労働省・経済産業省推奨のQQ-methodおよびSPQ（全体パフォーマンス評価）に準拠した調査
 const QUESTIONS = [
@@ -206,7 +206,7 @@ function Survey() {
   const idxOf = (id) => QUESTIONS.findIndex((q) => q.id === id);
 
   useEffect(() => {
-    if (!companyCode) return;
+    if (!companyCode || !isAppConfigured) return;
     let cancelled = false;
     gasPost({ action: 'company', company: companyCode })
       .then((res) => {
@@ -359,12 +359,8 @@ function Survey() {
     return hasEnvIssue && hasBodyPain;
   };
 
-  if (companyState !== 'ok') {
-    return <CompanyGate state={companyState} onRetry={() => { setCompanyState('checking'); setCompanyRetry((n) => n + 1); }} />;
-  }
-
-  // 運営者情報が未設定のまま公開されることを防ぐ
-  if (!isOperatorConfigured) {
+  // 運営者情報・GASのURLが未設定のまま公開されることを防ぐ（企業コードの確認より先に判定する）
+  if (!isAppConfigured) {
     return (
       <div className="app-container">
         <div className="survey-card animate-fade-in">
@@ -373,6 +369,10 @@ function Survey() {
         </div>
       </div>
     );
+  }
+
+  if (companyState !== 'ok') {
+    return <CompanyGate state={companyState} onRetry={() => { setCompanyState('checking'); setCompanyRetry((n) => n + 1); }} />;
   }
 
   if (stage === 'consent') {

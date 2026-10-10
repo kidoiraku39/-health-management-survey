@@ -1,15 +1,14 @@
 // ===== 通信先 =====
-// GASを再デプロイするとURLが変わります。Vercelの環境変数 VITE_GAS_WEB_APP_URL で上書きできます。
-// （環境変数を使わない場合は、下のURLを新しいものに書き換えてください）
-export const GAS_WEB_APP_URL =
-  import.meta.env.VITE_GAS_WEB_APP_URL ||
-  'https://script.google.com/macros/s/AKfycbyjArFJ9OwG1YMkhb6121oMmgf0FJJ8zqlJ2WbASNIrFmlHdY7k_HDN8urYKjZrhR5Iyw/exec';
+// GASのウェブアプリURLは、Vercelの環境変数 VITE_GAS_WEB_APP_URL で設定します（必須）。
+// 未設定の間は、従業員の画面には「準備中」と表示され、どこにも接続しません。
+export const GAS_WEB_APP_URL = import.meta.env.VITE_GAS_WEB_APP_URL || '';
 
 /**
  * GASへPOSTしてJSONを受け取る。
  * Content-Type を text/plain にしているのは、ブラウザの事前確認(preflight)を避けるため（GASの定番の方法）。
  */
 export async function gasPost(body) {
+  if (!GAS_WEB_APP_URL) throw new Error('gas_url_not_set');
   const res = await fetch(GAS_WEB_APP_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -24,7 +23,7 @@ export async function gasPost(body) {
 //   VITE_OPERATOR_NAME      運営者名（例：○○）
 //   VITE_OPERATOR_CONTACT   問い合わせ先（メールアドレスなど）
 //   VITE_OPERATOR_RETENTION 保管期間（例：回答から12か月）
-// 3つとも設定されるまで、従業員の画面には「準備中」と表示され、回答できません（誤公開の防止）。
+// 3つとも（とGASのURLも）設定されるまで、従業員の画面には「準備中」と表示され、回答できません（誤公開の防止）。
 // 運営者が異なる事業で使う場合は、事業ごとにVercelのプロジェクトとGASを分けて、それぞれ設定してください。
 export const OPERATOR = {
   name: import.meta.env.VITE_OPERATOR_NAME || '【要設定】運営者名',
@@ -32,7 +31,9 @@ export const OPERATOR = {
   retention: import.meta.env.VITE_OPERATOR_RETENTION || '【要設定】保管期間',
 };
 
-export const isOperatorConfigured = !Object.values(OPERATOR).some((v) => v.includes('【要設定】'));
+// 運営者情報の3項目とGASのURLがそろっているか。そろうまで従業員の画面は「準備中」
+export const isAppConfigured =
+  Boolean(GAS_WEB_APP_URL) && !Object.values(OPERATOR).some((v) => v.includes('【要設定】'));
 
 // 同意文面を変えたら、このバージョンも変えてください（回答ごとに記録されます）
 export const CONSENT_VERSION = '2026-10-v2';
