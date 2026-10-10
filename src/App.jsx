@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import './App.css';
+import AdminPage from './AdminPage.jsx';
+import { gasPost, OPERATOR, isAppConfigured, CONSENT_VERSION, CONSENT_SECTIONS } from './config.js';
 
 // 厚生労働省・経済産業省推奨のQQ-methodおよびSPQ（全体パフォーマンス評価）に準拠した調査
 const QUESTIONS = [
@@ -149,7 +151,7 @@ const QUESTIONS = [
     title: 'Q7. 専門家介入の希望',
     subtitle: '現在抱えている課題について、外部の専門家による具体的なサポート（介入）を希望しますか？（複数選択可能）',
     options: [
-      { id: 'exp_body', label: '【身体の痛み・姿勢改善】 腰痛・肩こり対策、整体・ストレッチ指導など' },
+      { id: 'exp_body', label: '【身体の痛み・姿勢改善】 腰痛・肩こり対策、運動指導・ストレッチ指導など' },
       { id: 'exp_lifestyle', label: '【生活習慣病・数値改善】 血圧・脂質健康相談、重症化予防指導など' },
       { id: 'exp_nutrition', label: '【食事・栄養指導】 メタボ改善、食事バランス、ダイエット支援など' },
       { id: 'exp_mental', label: '【心の健康・ストレスケア】 メンタルカウンセリング、ストレスマネジメントなど' },
@@ -168,27 +170,30 @@ const QUESTIONS = [
   }
 ];
 
-const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyjArFJ9OwG1YMkhb6121oMmgf0FJJ8zqlJ2WbASNIrFmlHdY7k_HDN8urYKjZrhR5Iyw/exec"; 
+// 企業コード（URLの ?c=xxxx）。企業ごとの専用URLで配布する
+function getCompanyCode() {
+  return (new URLSearchParams(window.location.search).get('c') || '').trim();
+}
 
-function App() {
+function Survey() {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState({});
   const [isCompleted, setIsCompleted] = useState(false);
   const [result, setResult] = useState(null);
-  const [viewMode, setViewMode] = useState('survey');
-  const [isAdmin, setIsAdmin] = useState(false);
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('admin') === 'true') {
-      setIsAdmin(true);
-    }
-  }, []); 
+  // 企業コードの確認（checking → ok / invalid / error）
+  const [companyCode] = useState(getCompanyCode);
+  const [companyState, setCompanyState] = useState(companyCode ? 'checking' : 'invalid');
+  const [companyName, setCompanyName] = useState('');
+  const [companyRetry, setCompanyRetry] = useState(0);
 
-  // ダッシュボード用のリアルタイムデータ状態
-  const [dbData, setDbData] = useState(null);
-  const [isDbLoading, setIsDbLoading] = useState(false);
-  const [dbError, setDbError] = useState(null);
+  // 同意画面（intro → consent → 質問）
+  const [stage, setStage] = useState('survey');
+  const [consentChecked, setConsentChecked] = useState(false);
+
+  // 送信状況（idle → sending → done / error）
+  const [submitStatus, setSubmitStatus] = useState('idle');
+  const [submitError, setSubmitError] = useState('');
 
   // 個人結果のシミュレーション用
   const [simAnnualSalary, setSimAnnualSalary] = useState(6000000);
@@ -198,43 +203,37 @@ function App() {
   const currentQuestion = QUESTIONS[currentIdx];
   const progressPercentage = (currentIdx / (QUESTIONS.length - 1)) * 100;
 
-  // ダッシュボードデータの取得
-  useEffect(() => {
-    if (viewMode === 'dashboard') {
-      fetchDashboardData();
-    }
-  }, [viewMode]);
+  const idxOf = (id) => QUESTIONS.findIndex((q) => q.id === id);
 
-  const fetchDashboardData = async () => {
-    setIsDbLoading(true);
-    setDbError(null);
-    try {
-      const response = await fetch(GAS_WEB_APP_URL);
-      if (!response.ok) throw new Error("データの取得に失敗しました。");
-      const text = await response.text();
-      const data = JSON.parse(text);
-      setDbData(data);
-    } catch (err) {
-      console.error(err);
-      setDbError("スプレッドシートとの連携エラーが発生しました。デモデータを表示します。");
-      // フォールバックデモデータ
-      setDbData({
-        totalRespondents: 12,
-        averageLossPercentage: 27,
-        totalAnnualLoss: 22356000,
-        departmentStats: {
-          "営業・企画": { count: 4, averageLossPercentage: 24 },
-          "開発・技術": { count: 5, averageLossPercentage: 34 },
-          "総務・人事・経理": { count: 3, averageLossPercentage: 16 },
-          "その他": { count: 0, averageLossPercentage: 0 }
+  useEffect(() => {
+    if (!companyCode || !isAppConfigured) return;
+    let cancelled = false;
+    gasPost({ action: 'company', company: companyCode })
+      .then((res) => {
+        if (cancelled) return;
+        if (res.ok) {
+          setCompanyName(res.name);
+          setCompanyState('ok');
+        } else {
+          setCompanyState('invalid');
         }
+      })
+      .catch((err) => {
+        console.error(err);
+        if (!cancelled) setCompanyState('error');
       });
-    } finally {
-      setIsDbLoading(false);
-    }
-  };
+    return () => {
+      cancelled = true;
+    };
+  }, [companyCode, companyRetry]);
 
   const handleNext = () => {
+    // イントロ → 同意画面（同意するまで質問には進めない）
+    if (currentQuestion.id === 'intro') {
+      setStage('consent');
+      return;
+    }
+
     // 従業員ID入力画面で、空欄でも許可する
     if (currentQuestion.id === 'q_id') {
       if (!answers['q_id']) {
@@ -251,8 +250,8 @@ function App() {
         'q4': 10,
         'q5': 10
       }));
-      // q2 (index 4) -> q6 (index 9) にジャンプ
-      setCurrentIdx(9); 
+      // q2 -> q6 にジャンプ
+      setCurrentIdx(idxOf('q6'));
       return;
     }
 
@@ -272,11 +271,11 @@ function App() {
   const handleBack = () => {
     // スキップ分岐の戻り処理
     if (currentQuestion.id === 'q6' && answers['q2']?.id === 'symp_none') {
-      setCurrentIdx(4); // q2 (index 4) に戻る
+      setCurrentIdx(idxOf('q2')); // q2 に戻る
       return;
     }
     if (currentQuestion.id === 'q7' && answers['q6']?.id === 'env_no') {
-      setCurrentIdx(9); // q6 (index 9) に戻る
+      setCurrentIdx(idxOf('q6')); // q6 に戻る
       return;
     }
 
@@ -323,28 +322,29 @@ function App() {
       level: lossPercentage > 30 ? '危険' : lossPercentage > 15 ? '注意' : '良好'
     });
     setIsCompleted(true);
-    await submitToGAS(answers, lossPercentage);
+    await submitResponses(answers);
   };
 
-  const submitToGAS = async (data, loss) => {
-    if (GAS_WEB_APP_URL === "") return;
+  // 回答をGASへ送る。失敗した場合は画面に表示し、再送できるようにする
+  const submitResponses = async (data) => {
+    setSubmitStatus('sending');
+    setSubmitError('');
     try {
-      await fetch(GAS_WEB_APP_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: {
-          'Content-Type': 'text/plain',
-        },
-        body: JSON.stringify({
-          timestamp: new Date().toISOString(),
-          employeeId: data['q_id'] || '匿名希望',
-          department: data['q_dept']?.label || '未設定',
-          lossPercentage: loss,
-          answers: data
-        })
+      const res = await gasPost({
+        action: 'submit',
+        company: companyCode,
+        consent: consentChecked,
+        consentVersion: CONSENT_VERSION,
+        employeeId: data['q_id'] || '匿名希望',
+        department: data['q_dept']?.label || '未設定',
+        answers: data,
       });
-    } catch (error) {
-      console.error("Error:", error);
+      if (!res.ok) throw new Error(res.error || 'submit_failed');
+      setSubmitStatus('done');
+    } catch (err) {
+      console.error(err);
+      setSubmitError(err.message);
+      setSubmitStatus('error');
     }
   };
 
@@ -359,67 +359,39 @@ function App() {
     return hasEnvIssue && hasBodyPain;
   };
 
-  if (viewMode === 'dashboard') {
+  // 運営者情報・GASのURLが未設定のまま公開されることを防ぐ（企業コードの確認より先に判定する）
+  if (!isAppConfigured) {
     return (
-      <div className="app-container dashboard-view">
-        <div className="dashboard-header">
-          <h1>健康経営ダッシュボード (実回答連動)</h1>
-          <button className="btn btn-secondary" onClick={() => setViewMode('survey')}>戻る</button>
+      <div className="app-container">
+        <div className="survey-card animate-fade-in">
+          <h2 className="question-title">アンケートは準備中です</h2>
+          <p className="question-subtitle">現在回答を受け付けていません。担当者からの案内をお待ちください。</p>
         </div>
-        
-        {isDbLoading ? (
-          <div className="loading-container"><div className="loader"></div><p>リアルタイムデータを集計中...</p></div>
-        ) : dbError ? (
-          <div className="dashboard-content">
-            <div className="error-banner">{dbError}</div>
-            {/* デモデータを表示 */}
-            {dbData && renderDashboardContent(dbData)}
-          </div>
-        ) : (
-          <div className="dashboard-content">
-            {dbData && renderDashboardContent(dbData)}
-          </div>
-        )}
       </div>
     );
   }
 
-  function renderDashboardContent(data) {
+  if (companyState !== 'ok') {
+    return <CompanyGate state={companyState} onRetry={() => { setCompanyState('checking'); setCompanyRetry((n) => n + 1); }} />;
+  }
+
+  if (stage === 'consent') {
     return (
-      <>
-        <div className="dashboard-card">
-          <h3>部署別 プレゼンティーズム平均損失率 (%)</h3>
-          <div className="mock-chart">
-            {Object.keys(data.departmentStats).map(dept => {
-              const stats = data.departmentStats[dept];
-              return (
-                <div className="bar-row" key={dept}>
-                  <span className="label">{dept} ({stats.count}名)</span>
-                  <div className="bar-wrapper">
-                    <div className="bar" style={{width: `${Math.max(stats.averageLossPercentage, 5)}%`}}>
-                      {stats.averageLossPercentage}%
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-        <div className="dashboard-card">
-          <h3>組織全体の推定損失額 (年間)</h3>
-          <div className="total-loss">¥{data.totalAnnualLoss.toLocaleString()}</div>
-          <p className="note">
-            ※現在登録されている全{data.totalRespondents}名のデータに基づく実数値試算です。<br />
-            （想定平均年収6,000,000円、社会保険料等加味15%）
-          </p>
-        </div>
-      </>
+      <ConsentScreen
+        companyName={companyName}
+        checked={consentChecked}
+        onToggle={setConsentChecked}
+        onBack={() => setStage('survey')}
+        onAgree={() => {
+          setStage('survey');
+          setCurrentIdx(idxOf('q_id'));
+        }}
+      />
     );
   }
 
   if (isCompleted) {
     // 1. 全般的な損失（SPQベース・実年収ベースでの算出）
-    const hourlyCost = (simAnnualSalary / (simWorkDays * simWorkHours)) * 1.15;
     const spqAnnualLoss = Math.floor(simAnnualSalary * 1.15 * result.spqLossRatio);
 
     // 2. 主症状による個別損失（QQ-method公式・標準人件費単価3,300円ベース）
@@ -435,6 +407,16 @@ function App() {
               {result.level === '良好' ? '✨' : result.level === '注意' ? '⚠️' : '🚨'}
             </div>
             <h1 className="question-title">あなた個人の健康診断レポート</h1>
+
+            {submitStatus === 'sending' && <div className="submit-status">回答を送信しています...</div>}
+            {submitStatus === 'done' && <div className="submit-status ok">回答を送信しました。ご協力ありがとうございました。</div>}
+            {submitStatus === 'error' && (
+              <div className="error-banner">
+                回答の送信に失敗しました。この画面を閉じずに、通信状況を確認して再送してください。
+                {submitError && <div style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>（エラー内容：{submitError}）</div>}
+                <button className="btn btn-primary" style={{ marginTop: '0.75rem' }} onClick={() => submitResponses(answers)}>再送する</button>
+              </div>
+            )}
             
             <div className="result-stats">
               <div className="stat-item">
@@ -500,12 +482,7 @@ function App() {
             </div>
             
             <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
-              <button className="btn btn-secondary" style={{flex: 1}} onClick={() => { setCurrentIdx(0); setAnswers({}); setIsCompleted(false); }}>最初からやり直す</button>
-              {isAdmin && (
-                <button className="btn btn-primary" style={{flex: 1}} onClick={() => setViewMode('dashboard')}>
-                  ダッシュボード
-                </button>
-              )}
+              <button className="btn btn-secondary" style={{flex: 1}} onClick={() => { setCurrentIdx(0); setAnswers({}); setIsCompleted(false); setSubmitStatus('idle'); setConsentChecked(false); }}>最初からやり直す</button>
             </div>
           </div>
         </div>
@@ -523,6 +500,7 @@ function App() {
         )}
         
         <div className="question-header">
+          {currentQuestion.id === 'intro' && companyName && <div className="company-banner">{companyName} 様向け</div>}
           <h2 className="question-title">{currentQuestion.title}</h2>
           {currentQuestion.subtitle && <p className="question-subtitle" dangerouslySetInnerHTML={{ __html: currentQuestion.subtitle }}></p>}
         </div>
@@ -531,11 +509,6 @@ function App() {
           <div className="info-view">
             <div className="description">{currentQuestion.description}</div>
             <button className="btn btn-primary full-width" onClick={handleNext}>{currentQuestion.buttonLabel}</button>
-            {currentQuestion.id === 'intro' && isAdmin && (
-              <button className="btn btn-secondary full-width" style={{ marginTop: '1rem' }} onClick={() => setViewMode('dashboard')}>
-                管理者ダッシュボードを開く
-              </button>
-            )}
           </div>
         )}
 
@@ -613,4 +586,74 @@ function App() {
   );
 }
 
-export default App;
+// 企業コードの確認中／無効／通信エラー時の画面
+function CompanyGate({ state, onRetry }) {
+  return (
+    <div className="app-container">
+      <div className="survey-card animate-fade-in">
+        {state === 'checking' && (
+          <div className="loading-container"><div className="loader"></div><p>確認しています...</p></div>
+        )}
+        {state === 'invalid' && (
+          <>
+            <h2 className="question-title">専用のURLからアクセスしてください</h2>
+            <p className="question-subtitle">
+              このアンケートは、企業ごとにご案内している専用のURL（またはQRコード）からのみ回答できます。
+              ご案内の内容をご確認ください。
+            </p>
+          </>
+        )}
+        {state === 'error' && (
+          <>
+            <h2 className="question-title">接続できませんでした</h2>
+            <p className="question-subtitle">通信状況を確認して、もう一度お試しください。</p>
+            <button className="btn btn-primary full-width" onClick={onRetry}>再読み込み</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// 同意画面（チェックを入れるまで先に進めない）
+function ConsentScreen({ companyName, checked, onToggle, onBack, onAgree }) {
+  return (
+    <div className="app-container">
+      <div className="survey-card animate-fade-in">
+        <div className="question-header">
+          {companyName && <div className="company-banner">{companyName} 様向け</div>}
+          <h2 className="question-title">回答の前に：個人情報の取り扱いについて</h2>
+          <p className="question-subtitle">内容をお読みいただき、ご同意のうえでご回答ください。</p>
+        </div>
+
+        <div className="consent-box">
+          {CONSENT_SECTIONS.map((section) => (
+            <div className="consent-section" key={section.title}>
+              <h4>{section.title}</h4>
+              <p>{typeof section.body === 'function' ? section.body() : section.body}</p>
+            </div>
+          ))}
+          <p className="note">運営者：{OPERATOR.name}</p>
+        </div>
+
+        <label className="consent-check">
+          <input type="checkbox" checked={checked} onChange={(e) => onToggle(e.target.checked)} />
+          <span>上記の内容を読み、同意して回答します</span>
+        </label>
+
+        <button className="btn btn-primary full-width" style={{ marginTop: '1.5rem' }} disabled={!checked} onClick={onAgree}>
+          同意して回答を始める
+        </button>
+        <div className="nav-controls">
+          <button className="btn-nav secondary" onClick={onBack}>戻る</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 管理者用URL（?admin=true）はログイン画面へ。それ以外は従業員向けアンケート
+export default function App() {
+  const isAdminPage = new URLSearchParams(window.location.search).get('admin') === 'true';
+  return isAdminPage ? <AdminPage /> : <Survey />;
+}

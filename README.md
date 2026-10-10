@@ -1,16 +1,81 @@
-# React + Vite
+# 健康経営サーベイ
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+従業員の体調不良による仕事への影響（プレゼンティーイズム）を測るアンケートです。
+フロントは React + Vite（Vercel で公開）、回答の保存と集計は Google Apps Script（GAS）+ Googleスプレッドシートです。
 
-Currently, two official plugins are available:
+## 仕組み
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+| 画面 | URL | 認証 |
+|---|---|---|
+| 従業員用アンケート | `https://（公開URL）/?c=企業コード` | 企業コードが「企業マスタ」にあること |
+| 管理者ダッシュボード | `https://（公開URL）/?admin=true` | 管理者パスワード（GAS側で検証） |
 
-## React Compiler
+- 企業コードのないURL、未登録・無効なコードでは回答できません。
+- 回答前に同意画面を表示し、チェックを入れないと進めません。同意バージョンも回答ごとに記録します。
+- 管理者パスワードはGASの Script Properties にのみ保存します（コードやGitHubには置きません）。
+- 集計は **5名以上** のグループだけ返します。回答の少ない部署は自動で合算し、5名以上にできない場合は部署別を出しません（判定はGAS側で行い、小さいグループの値はブラウザに送られません）。
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 初回セットアップ（GAS）
 
-## Expanding the ESLint configuration
+回答データは、**運営者の事業用Googleアカウント**で管理します（個人のアカウントとは分ける）。個人のアカウントと混ざらないよう、別のブラウザプロファイルかシークレットウィンドウで、事業用アカウントにログインして作業してください。
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+1. 事業用アカウントで新しいスプレッドシートを作り、「拡張機能」→「Apps Script」を開く。
+2. `src/Code.gs` の内容をエディタに貼り付けて保存する。
+3. 関数 `initialSetup` を選んで実行する（初回は権限の承認が必要）。「企業マスタ」シートと見出しが作られる。
+4. 関数 `generateAdminToken` を実行し、実行ログに出た文字列をコピーする。
+5. 左の歯車（プロジェクトの設定）→「スクリプト プロパティ」で、プロパティ名 `ADMIN_TOKEN`、値に手順4の文字列を登録する。これが管理者パスワードになる（16文字以上必須。未設定だと管理画面は常に拒否）。
+6. 企業ごとに、関数 `generateCompanyCode` で企業コードを発行し、「企業マスタ」に1行ずつ登録する。
+
+   | 企業コード | 会社名 | 有効(TRUE/FALSE) |
+   |---|---|---|
+   | （発行した文字列） | A社 | TRUE |
+
+   回答を止めたい企業は `FALSE` にする。事前・事後アンケートを分けたい場合は、別のコードで別の行にする。
+7. 「デプロイ」→「新しいデプロイ」→種類「ウェブアプリ」。実行ユーザーは「自分」、アクセスできるユーザーは「全員」にしてデプロイし、表示されたウェブアプリURL（`.../exec`）を控える。
+   **コードを書き換えたときは「デプロイを管理」→ 編集 → 新しいバージョン で更新する**（URLを変えずに反映できる）。
+
+> 以前、個人アカウントで作った旧バージョンのGASは、`doGet` で全集計を返す作りでした。旧アカウントのApps Scriptで「デプロイを管理」を開き、**旧デプロイを「アーカイブ」して無効にしてください**（URLが残っている間は、集計が公開されたままになります）。旧スプレッドシートに本物の回答が残っている場合は、必要な分を事業用アカウントのシートへ移すか、削除してください。
+
+## 初回セットアップ（フロント）
+
+1. Vercel の Environment Variables に、次の4項目を設定する（`.env.example` を参照）。**1つでも未設定の間は、従業員の画面は「準備中」と表示され回答できません。**
+   - `VITE_GAS_WEB_APP_URL`：GASのウェブアプリURL（上の手順7で控えたもの。コードには既定値を持たせていません）
+   - `VITE_OPERATOR_NAME`：運営者名
+   - `VITE_OPERATOR_CONTACT`：問い合わせ先
+   - `VITE_OPERATOR_RETENTION`：保管期間
+2. 同意文面（`CONSENT_SECTIONS`）が実際の運用と合っているか確認する。変更したら `CONSENT_VERSION` も更新する。
+3. 環境変数は、ビルド時に画面へ埋め込まれます。追加・変更したあとは、再デプロイしてください。
+4. デプロイして、次の確認をする。
+   - `?c=（登録した企業コード）` で、企業名つきでアンケートが開く
+   - コードなし・でたらめなコードでは回答できない
+   - 1件回答して、スプレッドシートの「回答一覧」に企業コード・同意バージョンつきで保存される
+   - `?admin=true` が管理者パスワードを要求し、誤ったパスワードでは何も表示されない
+
+## 運営者が異なる事業で使う場合
+
+運営者（回答データの管理者）が事業ごとに違う場合は、**事業ごとに環境を分けてください**。同じコードを使い、次のものだけを別にします。
+
+| | 事業A | 事業B |
+|---|---|---|
+| Apps Script とスプレッドシート | 専用のものを1つ | 専用のものを1つ |
+| `ADMIN_TOKEN`（管理者パスワード） | 別の値 | 別の値 |
+| Vercel のプロジェクト | 専用（同じリポジトリを接続） | 専用（同じリポジトリを接続） |
+| `VITE_OPERATOR_*` と `VITE_GAS_WEB_APP_URL` | 事業Aの値 | 事業Bの値 |
+
+1つのスプレッドシート・1つの管理者パスワードで両方を扱うと、一方の事業の関係者が、もう一方の回答を見られる状態になり、同意画面の「閲覧できるのは運営者のみ」とも食い違います。
+
+## 開発
+
+```
+npm install
+npm run dev      # 開発サーバー
+npm run build    # 本番ビルド
+npm run lint
+```
+
+## 運用上の注意
+
+- 「回答一覧」シートには従業員ID・自由記述が含まれます。スプレッドシートの共有範囲は運営者のみにしてください。
+- 管理者パスワードを変える（漏れた疑いがある）ときは、`generateAdminToken` で新しい値を作り、`ADMIN_TOKEN` を更新します。
+- 企業コードが外部に漏れた場合は、企業マスタの該当行を `FALSE` にして、新しいコードで行を追加します。
+- 回答の削除依頼があった場合は、従業員IDで「回答一覧」を検索して該当行を削除します。

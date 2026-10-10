@@ -21,7 +21,7 @@
 つきましては、お忙しいところ恐縮ですが、以下の通りご回答をお願いいたします。
 
 ■ アンケート概要
-・回答URL：https://health-management-survey.vercel.app/?company=[あなたの企業名]
+・回答URL：https://health-management-survey.vercel.app/?c=[企業専用コード]（人事のご担当者様から案内される専用URLからご回答ください）
 ・所要時間：約2〜3分（PC・スマホのどちらからでも回答いただけます）
 ・回答期限：[月]月[日]（[曜日]）まで
 
