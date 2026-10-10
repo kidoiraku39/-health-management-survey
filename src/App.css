@@ -708,3 +708,45 @@
 @keyframes loader-spin {
   to { transform: rotate(360deg); }
 }
+
+/* ===== 戻るボタン・ダッシュボードの棒グラフ（元のCSSに定義がなかった部分） ===== */
+.nav-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1.5rem;
+}
+
+.btn-nav {
+  background: none;
+  border: none;
+  padding: 0.5rem 0;
+  color: var(--color-text-secondary);
+  font-size: 0.95rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.btn-nav:hover {
+  color: var(--color-text-primary);
+}
+
+.bar-row .label {
+  width: 180px;
+  flex-shrink: 0;
+  padding-right: 12px;
+}
+
+.bar-row .bar-wrapper {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+}
+
+@media (max-width: 640px) {
+  .bar-row .label {
+    width: 110px;
+  }
+}
