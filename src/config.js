@@ -35,12 +35,12 @@ export const OPERATOR = {
 export const isOperatorConfigured = !Object.values(OPERATOR).some((v) => v.includes('【要設定】'));
 
 // 同意文面を変えたら、このバージョンも変えてください（回答ごとに記録されます）
-export const CONSENT_VERSION = '2026-10-v1';
+export const CONSENT_VERSION = '2026-10-v2';
 
 export const CONSENT_SECTIONS = [
   {
     title: '1. 目的',
-    body: '職場における体調不良と仕事への影響を把握し、職場環境や健康づくりの改善策を検討するために実施します。個人の評価や人事上の判断には使用しません。',
+    body: '職場における体調不良と仕事への影響を把握し、職場環境や健康づくりの改善策を検討するために実施します。個人の評価や人事上の判断には使用しません。また、回答はこの健康経営事業の目的以外（運営者の他の事業の案内・勧誘など）には使用しません。',
   },
   {
     title: '2. 取得する情報',
